@@ -21,3 +21,5 @@ CREATE TABLE IF NOT EXISTS images (
   description TEXT,
   upload_time DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+INSERT INTO settings (key, value) VALUES ('site_favicon', 'https://github.githubassets.com/favicons/favicon.svg');
