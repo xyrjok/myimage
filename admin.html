@@ -55,9 +55,6 @@
 <div class="login-container" id="login-view">
     <h2 style="text-align: center;">🔒 图床控制台登录</h2>
     <div class="form-group">
-        <input type="text" id="apiUrl" placeholder="Worker API 域名 (如: https://api.xxx.workers.dev)">
-    </div>
-    <div class="form-group">
         <input type="text" id="username" placeholder="后台账号">
     </div>
     <div class="form-group">
@@ -124,12 +121,14 @@
 </div>
 
 <script>
-    let apiBaseUrl = localStorage.getItem('imgbed_api') || '';
+    // ⚠️ 在这里直接写死你的后端 Worker API 域名（注意末尾不要加 /）
+    // 如果你的后端域名有变，请修改这里
+    const apiBaseUrl = "https://myimage.137222445.workers.dev"; 
+    
     let authHeader = localStorage.getItem('imgbed_auth') || '';
 
     window.onload = () => {
-        if (apiBaseUrl && authHeader) {
-            document.getElementById('apiUrl').value = apiBaseUrl;
+        if (authHeader) {
             showAdmin();
             loadImages();
             loadSettings(); // 加载设置
@@ -157,20 +156,17 @@
 
     // --- 登录与基础控制 ---
     async function login() {
-        const url = document.getElementById('apiUrl').value.trim().replace(/\/$/, "");
         const user = document.getElementById('username').value.trim();
         const pass = document.getElementById('password').value.trim();
-        if (!url || !user || !pass) return alert("请填写完整信息！");
+        if (!user || !pass) return alert("请填写完整的账号和密码！");
         
         const tempAuth = 'Basic ' + btoa(user + ':' + pass);
         try {
-            const res = await fetch(`${url}/api/admin/images`, { headers: { 'Authorization': tempAuth } });
+            const res = await fetch(`${apiBaseUrl}/api/admin/images`, { headers: { 'Authorization': tempAuth } });
             if (res.status === 401) throw new Error("账号或密码错误");
-            if (!res.ok) throw new Error("API 地址错误");
+            if (!res.ok) throw new Error("API 地址请求失败，请检查代码中写死的域名是否正确");
             
-            apiBaseUrl = url;
             authHeader = tempAuth;
-            localStorage.setItem('imgbed_api', apiBaseUrl);
             localStorage.setItem('imgbed_auth', authHeader);
             showAdmin();
             loadImages();
@@ -182,6 +178,7 @@
         localStorage.removeItem('imgbed_auth');
         document.getElementById('login-view').classList.remove('hidden');
         document.getElementById('admin-view').classList.add('hidden');
+        document.getElementById('password').value = ''; // 退出时清空密码框
     }
 
     function showAdmin() {
