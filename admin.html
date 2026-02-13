@@ -4,30 +4,56 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>私人图床 - 管理后台</title>
+    <link id="dynamic-favicon" rel="icon" href="data:;base64,iVBORw0KGgo=">
     <style>
-        :root { --primary: #0051c3; --bg: #f4f4f9; --text: #333; }
-        body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 20px; margin: 0; }
-        .container { max-width: 900px; margin: 0 auto; background: #fff; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        :root { --primary: #0051c3; --bg: #f4f4f9; --text: #333; --sidebar-bg: #2c3e50; --sidebar-hover: #34495e; }
+        body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 0; }
         .hidden { display: none !important; }
+        
+        /* 登录页面样式 */
+        .login-container { max-width: 400px; margin: 100px auto; background: #fff; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
         .form-group { margin-bottom: 15px; }
         input[type="text"], input[type="password"] { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
         button { background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: 0.2s; }
         button:hover { opacity: 0.9; }
         .btn-danger { background: #dc3545; }
+
+        /* 后台整体布局 */
+        .layout { display: flex; min-height: 100vh; }
+        
+        /* 左侧边栏 */
+        .sidebar { width: 220px; background: var(--sidebar-bg); color: white; display: flex; flex-direction: column; }
+        .sidebar-header { padding: 20px; text-align: center; border-bottom: 1px solid #1a252f; font-weight: bold; font-size: 18px; }
+        .nav-item { padding: 15px 20px; cursor: pointer; border-left: 4px solid transparent; transition: 0.3s; }
+        .nav-item:hover { background: var(--sidebar-hover); }
+        .nav-item.active { border-left-color: #3498db; background: var(--sidebar-hover); }
+        .logout-btn { margin-top: auto; padding: 15px 20px; cursor: pointer; background: #c0392b; text-align: center; }
+        .logout-btn:hover { background: #e74c3c; }
+
+        /* 右侧内容区 */
+        .main-content { flex: 1; padding: 30px; overflow-y: auto; height: 100vh; box-sizing: border-box; }
         .header-bar { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 20px; }
-        .upload-area { border: 2px dashed #ccc; padding: 30px; text-align: center; border-radius: 8px; margin-bottom: 20px; background: #fafafa; }
+        
+        /* 图片管理区 */
+        .upload-area { border: 2px dashed #ccc; padding: 30px; text-align: center; border-radius: 8px; margin-bottom: 20px; background: #fff; }
         .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; }
         .image-card { border: 1px solid #eee; border-radius: 8px; overflow: hidden; background: #fff; display: flex; flex-direction: column; }
         .image-card img { width: 100%; height: 180px; object-fit: cover; }
         .image-info { padding: 15px; flex-grow: 1; }
         .image-info input { width: 100%; margin-top: 5px; margin-bottom: 10px; font-size: 12px; }
         .card-actions { display: flex; justify-content: space-between; padding: 10px 15px; background: #f8f9fa; border-top: 1px solid #eee; }
+
+        /* 系统设置区 */
+        .settings-card { background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); max-width: 600px; }
+        .settings-card label { display: block; margin-bottom: 8px; font-weight: bold; color: #555; }
+        .settings-card input { margin-bottom: 20px; }
+        .settings-help { font-size: 12px; color: #888; margin-top: -15px; margin-bottom: 20px; display: block; }
     </style>
 </head>
 <body>
 
-<div class="container" id="login-view">
-    <h2>🔒 图床控制台登录</h2>
+<div class="login-container" id="login-view">
+    <h2 style="text-align: center;">🔒 图床控制台登录</h2>
     <div class="form-group">
         <input type="text" id="apiUrl" placeholder="Worker API 域名 (如: https://api.xxx.workers.dev)">
     </div>
@@ -40,24 +66,61 @@
     <button onclick="login()" style="width: 100%;">安全登录</button>
 </div>
 
-<div class="container hidden" id="admin-view">
-    <div class="header-bar">
-        <h2>🛠️ 图床管理台</h2>
-        <div>
-            <a href="/" target="_blank" style="margin-right: 15px; color: var(--primary); text-decoration: none;">查看前台</a>
-            <button class="btn-danger" onclick="logout()">退出</button>
-        </div>
-    </div>
-    
-    <div class="upload-area">
-        <h3>📤 上传新图片</h3>
-        <input type="file" id="fileInput" accept="image/*" style="margin-bottom: 10px;">
-        <button onclick="uploadImage()">开始上传</button>
-        <div id="uploadStatus" style="margin-top: 10px; color: #28a745; font-weight: bold;"></div>
+<div class="layout hidden" id="admin-view">
+    <div class="sidebar">
+        <div class="sidebar-header">🌌 图床管理系统</div>
+        <div class="nav-item active" onclick="switchTab('images')" id="nav-images">🖼️ 图片管理</div>
+        <div class="nav-item" onclick="switchTab('settings')" id="nav-settings">⚙️ 系统设置</div>
+        <div class="logout-btn" onclick="logout()">🚪 退出登录</div>
     </div>
 
-    <h3>📂 我的图库 <button onclick="loadImages()" style="margin-left: 10px; padding: 5px 10px; font-size: 12px;">刷新</button></h3>
-    <div class="gallery-grid" id="gallery"></div>
+    <div class="main-content">
+        <div class="header-bar">
+            <h2 id="page-title">🖼️ 图片管理</h2>
+            <a href="/" target="_blank" style="color: var(--primary); text-decoration: none; font-weight: bold;">🌍 查看前台画廊</a>
+        </div>
+
+        <div id="tab-images">
+            <div class="upload-area">
+                <h3>📤 上传新图片</h3>
+                <input type="file" id="fileInput" accept="image/*" style="margin-bottom: 10px;">
+                <button onclick="uploadImage()">开始上传</button>
+                <div id="uploadStatus" style="margin-top: 10px; color: #28a745; font-weight: bold;"></div>
+            </div>
+
+            <h3>📂 我的图库 <button onclick="loadImages()" style="margin-left: 10px; padding: 5px 10px; font-size: 12px;">刷新</button></h3>
+            <div class="gallery-grid" id="gallery"></div>
+        </div>
+
+        <div id="tab-settings" class="hidden">
+            <div class="settings-card">
+                <label>Telegram Bot Token (TG_BOT_TOKEN)</label>
+                <input type="text" id="set_tg_bot_token" placeholder="123456:ABC-DEF1234ghIkl...">
+                <span class="settings-help">你的机器人 Token，用于调用 TG API</span>
+
+                <label>Telegram Chat ID (TG_CHAT_ID)</label>
+                <input type="text" id="set_tg_chat_id" placeholder="-100123456789">
+                <span class="settings-help">图片实体存放的私有频道 ID</span>
+
+                <label>API Key (API_KEY)</label>
+                <input type="text" id="set_api_key" placeholder="sk-your-secret-key">
+                <span class="settings-help">外部博客/系统调用图床 API 时的鉴权密钥</span>
+
+                <label>后台账号 (ADMIN_USER)</label>
+                <input type="text" id="set_admin_user" placeholder="admin">
+                
+                <label>后台密码 (ADMIN_PASS)</label>
+                <input type="text" id="set_admin_pass" placeholder="在此修改密码">
+
+                <label>网站图标 (SITE_FAVICON)</label>
+                <input type="text" id="set_site_favicon" placeholder="https://...">
+                <span class="settings-help">前后台网页标签页显示的 favicon 图标直链</span>
+
+                <button onclick="saveSettings()" style="width: 100%; margin-top: 10px;">💾 保存所有设置</button>
+                <div id="settingsStatus" style="margin-top: 15px; text-align: center; font-weight: bold;"></div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -69,9 +132,30 @@
             document.getElementById('apiUrl').value = apiBaseUrl;
             showAdmin();
             loadImages();
+            loadSettings(); // 加载设置
         }
     };
 
+    // --- 页面切换逻辑 ---
+    function switchTab(tabName) {
+        document.getElementById('tab-images').classList.add('hidden');
+        document.getElementById('tab-settings').classList.add('hidden');
+        document.getElementById('nav-images').classList.remove('active');
+        document.getElementById('nav-settings').classList.remove('active');
+
+        document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+        document.getElementById(`nav-${tabName}`).classList.add('active');
+
+        if (tabName === 'images') {
+            document.getElementById('page-title').innerText = '🖼️ 图片管理';
+            loadImages();
+        } else if (tabName === 'settings') {
+            document.getElementById('page-title').innerText = '⚙️ 系统设置';
+            loadSettings();
+        }
+    }
+
+    // --- 登录与基础控制 ---
     async function login() {
         const url = document.getElementById('apiUrl').value.trim().replace(/\/$/, "");
         const user = document.getElementById('username').value.trim();
@@ -90,6 +174,7 @@
             localStorage.setItem('imgbed_auth', authHeader);
             showAdmin();
             loadImages();
+            loadSettings();
         } catch (err) { alert("登录失败: " + err.message); }
     }
 
@@ -104,6 +189,7 @@
         document.getElementById('admin-view').classList.remove('hidden');
     }
 
+    // --- 图片管理逻辑 ---
     async function uploadImage() {
         const file = document.getElementById('fileInput').files[0];
         const statusEl = document.getElementById('uploadStatus');
@@ -163,6 +249,67 @@
 
     function copyText(text) {
         navigator.clipboard.writeText(text).then(() => alert("链接已复制！"));
+    }
+
+    // --- 系统设置逻辑 ---
+    async function loadSettings() {
+        try {
+            const res = await fetch(`${apiBaseUrl}/api/admin/settings`, { headers: { 'Authorization': authHeader } });
+            const settings = await res.json();
+            
+            if (settings.tg_bot_token) document.getElementById('set_tg_bot_token').value = settings.tg_bot_token;
+            if (settings.tg_chat_id) document.getElementById('set_tg_chat_id').value = settings.tg_chat_id;
+            if (settings.api_key) document.getElementById('set_api_key').value = settings.api_key;
+            if (settings.admin_user) document.getElementById('set_admin_user').value = settings.admin_user;
+            if (settings.admin_pass) document.getElementById('set_admin_pass').value = settings.admin_pass;
+            
+            if (settings.site_favicon) {
+                document.getElementById('set_site_favicon').value = settings.site_favicon;
+                document.getElementById('dynamic-favicon').href = settings.site_favicon; // 动态更新当前页面图标
+            }
+        } catch (err) {
+            console.error("加载配置失败", err);
+        }
+    }
+
+    async function saveSettings() {
+        const statusEl = document.getElementById('settingsStatus');
+        statusEl.innerText = "保存中...";
+        statusEl.style.color = "#555";
+
+        const updates = {
+            tg_bot_token: document.getElementById('set_tg_bot_token').value.trim(),
+            tg_chat_id: document.getElementById('set_tg_chat_id').value.trim(),
+            api_key: document.getElementById('set_api_key').value.trim(),
+            admin_user: document.getElementById('set_admin_user').value.trim(),
+            admin_pass: document.getElementById('set_admin_pass').value.trim(),
+            site_favicon: document.getElementById('set_site_favicon').value.trim()
+        };
+
+        try {
+            const res = await fetch(`${apiBaseUrl}/api/admin/settings`, {
+                method: 'POST',
+                headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+                body: JSON.stringify(updates)
+            });
+            
+            if (!res.ok) throw new Error("保存失败");
+            
+            statusEl.innerText = "✅ 设置保存成功！(修改账号密码后需要重新登录)";
+            statusEl.style.color = "#28a745";
+            
+            // 实时更新图标
+            if (updates.site_favicon) document.getElementById('dynamic-favicon').href = updates.site_favicon;
+
+            // 如果修改了账号或密码，需要更新本地 Auth 头以防后续接口无权访问
+            authHeader = 'Basic ' + btoa(updates.admin_user + ':' + updates.admin_pass);
+            localStorage.setItem('imgbed_auth', authHeader);
+
+            setTimeout(() => statusEl.innerText = "", 5000);
+        } catch (err) {
+            statusEl.innerText = "❌ 保存失败: " + err.message;
+            statusEl.style.color = "#dc3545";
+        }
     }
 </script>
 </body>
