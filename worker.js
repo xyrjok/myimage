@@ -151,6 +151,14 @@ export default {
         }
         return jsonResponse({ success: true });
       }
+      
+      // 后台读取系统设置 (GET 接口)
+      if (url.pathname === '/api/admin/settings' && request.method === 'GET') {
+        const { results } = await env.DB.prepare("SELECT key, value FROM settings").all();
+        const currentSettings = {};
+        results.forEach(row => { currentSettings[row.key] = row.value; });
+        return jsonResponse(currentSettings);
+      }
 
       // 后台更新系统设置
       if (url.pathname === '/api/admin/settings' && request.method === 'POST') {
