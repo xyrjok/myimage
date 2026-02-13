@@ -41,7 +41,7 @@ export default {
       const { results } = await env.DB.prepare("SELECT file_id, filename FROM images ORDER BY upload_time DESC").all();
       const publicImages = results.map(img => ({
         ...img, 
-        url: `${url.origin}/image/${img.file_id}`
+        url: `${url.origin}/image/${img.file_id}.jpg` // 【新增】自动加上 .jpg 后缀
       }));
       return jsonResponse(publicImages);
     }
@@ -77,7 +77,7 @@ export default {
             await env.DB.prepare("INSERT INTO images (file_id, message_id, filename, description) VALUES (?, ?, ?, ?)")
               .bind(fileId, messageId, filename, "API Upload").run();
 
-            return jsonResponse({ success: true, url: `${url.origin}/image/${fileId}`, file_id: fileId });
+            return jsonResponse({ success: true, url: `${url.origin}/image/${fileId}.jpg`, file_id: fileId }); // 【新增】加上后缀
           }
           return jsonResponse({ error: 'Telegram API Error', details: tgData }, 500);
         } catch (err) { return jsonResponse({ error: err.message }, 500); }
@@ -106,7 +106,7 @@ export default {
       // 后台读取图片列表
       if (url.pathname === '/api/admin/images' && request.method === 'GET') {
         const { results } = await env.DB.prepare("SELECT * FROM images ORDER BY upload_time DESC").all();
-        const imagesWithUrl = results.map(img => ({...img, url: `${url.origin}/image/${img.file_id}`}));
+        const imagesWithUrl = results.map(img => ({...img, url: `${url.origin}/image/${img.file_id}.jpg`})); // 【新增】加上后缀
         return jsonResponse(imagesWithUrl);
       }
 
@@ -132,7 +132,7 @@ export default {
             await env.DB.prepare("INSERT INTO images (file_id, message_id, filename, description) VALUES (?, ?, ?, ?)")
               .bind(fileId, messageId, filename, "Admin Upload").run();
 
-            return jsonResponse({ success: true, url: `${url.origin}/image/${fileId}` });
+            return jsonResponse({ success: true, url: `${url.origin}/image/${fileId}.jpg` }); // 【新增】加上后缀
           }
           return jsonResponse({ error: 'Telegram API Error', details: tgData }, 500);
         } catch (err) { return jsonResponse({ error: err.message }, 500); }
@@ -151,8 +151,8 @@ export default {
         }
         return jsonResponse({ success: true });
       }
-      
-      // 后台读取系统设置 (GET 接口)
+
+      // 后台读取系统设置 (前端页面刷新时加载)
       if (url.pathname === '/api/admin/settings' && request.method === 'GET') {
         const { results } = await env.DB.prepare("SELECT key, value FROM settings").all();
         const currentSettings = {};
@@ -173,16 +173,31 @@ export default {
     // 4. 核心功能：TG 图片直链反向代理
     // ==========================================
     if (url.pathname.startsWith('/image/')) {
-      const fileId = url.pathname.replace('/image/', '');
+      let fileId = url.pathname.replace('/image/', '');
+      
+      // 【新增】剥离后缀，还原真实的 TG file_id 以向 TG 发起请求
+      fileId = fileId.replace(/\.[a-zA-Z0-9]+$/, ''); 
+
       const getFileUrl = `https://api.telegram.org/bot${config.tg_bot_token}/getFile?file_id=${fileId}`;
       const fileData = await (await fetch(getFileUrl)).json();
 
       if (fileData.ok) {
-        const downloadUrl = `https://api.telegram.org/file/bot${config.tg_bot_token}/${fileData.result.file_path}`;
+        const filePath = fileData.result.file_path;
+        const downloadUrl = `https://api.telegram.org/file/bot${config.tg_bot_token}/${filePath}`;
         const imageRes = await fetch(downloadUrl);
+
+        // 【新增】动态推断 Content-Type 防止流式下载
+        let contentType = imageRes.headers.get('Content-Type');
+        if (!contentType || contentType === 'application/octet-stream') {
+           if (filePath.toLowerCase().endsWith('.png')) contentType = 'image/png';
+           else if (filePath.toLowerCase().endsWith('.gif')) contentType = 'image/gif';
+           else contentType = 'image/jpeg';
+        }
+
         return new Response(imageRes.body, {
           headers: { 
-            'Content-Type': imageRes.headers.get('Content-Type'),
+            'Content-Type': contentType,
+            'Content-Disposition': 'inline', // 【新增】强制浏览器在网页中显示图片而不是下载
             'Cache-Control': 'public, max-age=31536000', // 开启浏览器强缓存 1 年
             ...corsHeaders
           }
