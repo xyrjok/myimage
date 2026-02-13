@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>私人图床 - 管理后台</title>
+    <style>
+        :root { --primary: #0051c3; --bg: #f4f4f9; --text: #333; }
+        body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 20px; margin: 0; }
+        .container { max-width: 900px; margin: 0 auto; background: #fff; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .hidden { display: none !important; }
+        .form-group { margin-bottom: 15px; }
+        input[type="text"], input[type="password"] { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
+        button { background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: 0.2s; }
+        button:hover { opacity: 0.9; }
+        .btn-danger { background: #dc3545; }
+        .header-bar { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 20px; }
+        .upload-area { border: 2px dashed #ccc; padding: 30px; text-align: center; border-radius: 8px; margin-bottom: 20px; background: #fafafa; }
+        .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; }
+        .image-card { border: 1px solid #eee; border-radius: 8px; overflow: hidden; background: #fff; display: flex; flex-direction: column; }
+        .image-card img { width: 100%; height: 180px; object-fit: cover; }
+        .image-info { padding: 15px; flex-grow: 1; }
+        .image-info input { width: 100%; margin-top: 5px; margin-bottom: 10px; font-size: 12px; }
+        .card-actions { display: flex; justify-content: space-between; padding: 10px 15px; background: #f8f9fa; border-top: 1px solid #eee; }
+    </style>
+</head>
+<body>
+
+<div class="container" id="login-view">
+    <h2>🔒 图床控制台登录</h2>
+    <div class="form-group">
+        <input type="text" id="apiUrl" placeholder="Worker API 域名 (如: https://api.xxx.workers.dev)">
+    </div>
+    <div class="form-group">
+        <input type="text" id="username" placeholder="后台账号">
+    </div>
+    <div class="form-group">
+        <input type="password" id="password" placeholder="后台密码">
+    </div>
+    <button onclick="login()" style="width: 100%;">安全登录</button>
+</div>
+
+<div class="container hidden" id="admin-view">
+    <div class="header-bar">
+        <h2>🛠️ 图床管理台</h2>
+        <div>
+            <a href="/" target="_blank" style="margin-right: 15px; color: var(--primary); text-decoration: none;">查看前台</a>
+            <button class="btn-danger" onclick="logout()">退出</button>
+        </div>
+    </div>
+    
+    <div class="upload-area">
+        <h3>📤 上传新图片</h3>
+        <input type="file" id="fileInput" accept="image/*" style="margin-bottom: 10px;">
+        <button onclick="uploadImage()">开始上传</button>
+        <div id="uploadStatus" style="margin-top: 10px; color: #28a745; font-weight: bold;"></div>
+    </div>
+
+    <h3>📂 我的图库 <button onclick="loadImages()" style="margin-left: 10px; padding: 5px 10px; font-size: 12px;">刷新</button></h3>
+    <div class="gallery-grid" id="gallery"></div>
+</div>
+
+<script>
+    let apiBaseUrl = localStorage.getItem('imgbed_api') || '';
+    let authHeader = localStorage.getItem('imgbed_auth') || '';
+
+    window.onload = () => {
+        if (apiBaseUrl && authHeader) {
+            document.getElementById('apiUrl').value = apiBaseUrl;
+            showAdmin();
+            loadImages();
+        }
+    };
+
+    async function login() {
+        const url = document.getElementById('apiUrl').value.trim().replace(/\/$/, "");
+        const user = document.getElementById('username').value.trim();
+        const pass = document.getElementById('password').value.trim();
+        if (!url || !user || !pass) return alert("请填写完整信息！");
+        
+        const tempAuth = 'Basic ' + btoa(user + ':' + pass);
+        try {
+            const res = await fetch(`${url}/api/admin/images`, { headers: { 'Authorization': tempAuth } });
+            if (res.status === 401) throw new Error("账号或密码错误");
+            if (!res.ok) throw new Error("API 地址错误");
+            
+            apiBaseUrl = url;
+            authHeader = tempAuth;
+            localStorage.setItem('imgbed_api', apiBaseUrl);
+            localStorage.setItem('imgbed_auth', authHeader);
+            showAdmin();
+            loadImages();
+        } catch (err) { alert("登录失败: " + err.message); }
+    }
+
+    function logout() {
+        localStorage.removeItem('imgbed_auth');
+        document.getElementById('login-view').classList.remove('hidden');
+        document.getElementById('admin-view').classList.add('hidden');
+    }
+
+    function showAdmin() {
+        document.getElementById('login-view').classList.add('hidden');
+        document.getElementById('admin-view').classList.remove('hidden');
+    }
+
+    async function uploadImage() {
+        const file = document.getElementById('fileInput').files[0];
+        const statusEl = document.getElementById('uploadStatus');
+        if (!file) return alert("请先选择图片");
+        
+        statusEl.innerText = "上传中，请稍候...";
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const res = await fetch(`${apiBaseUrl}/api/admin/upload`, {
+                method: 'POST',
+                headers: { 'Authorization': authHeader },
+                body: formData
+            });
+            if (!res.ok) throw new Error(await res.text());
+            statusEl.innerText = "✅ 上传成功！";
+            document.getElementById('fileInput').value = '';
+            loadImages();
+            setTimeout(() => statusEl.innerText = "", 3000);
+        } catch (err) { statusEl.innerText = "❌ 上传失败"; alert(err.message); }
+    }
+
+    async function loadImages() {
+        const gallery = document.getElementById('gallery');
+        gallery.innerHTML = '加载中...';
+        try {
+            const res = await fetch(`${apiBaseUrl}/api/admin/images`, { headers: { 'Authorization': authHeader } });
+            const data = await res.json();
+            gallery.innerHTML = data.map(img => `
+                <div class="image-card" id="img-${img.id}">
+                    <a href="${img.url}" target="_blank"><img src="${img.url}" alt="image"></a>
+                    <div class="image-info">
+                        <input type="text" value="${img.url}" readonly onclick="this.select()">
+                    </div>
+                    <div class="card-actions">
+                        <button onclick="copyText('${img.url}')" style="background:#28a745; padding: 5px 10px;">复制直链</button>
+                        <button class="btn-danger" onclick="deleteImage(${img.id})" style="padding: 5px 10px;">删除</button>
+                    </div>
+                </div>
+            `).join('');
+        } catch (err) { gallery.innerHTML = '加载失败'; }
+    }
+
+    async function deleteImage(id) {
+        if(!confirm("确定彻底删除这张图片吗？TG端也会同步撤回！")) return;
+        try {
+            const res = await fetch(`${apiBaseUrl}/api/admin/delete`, {
+                method: 'POST',
+                headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id })
+            });
+            if(res.ok) document.getElementById(`img-${id}`).remove();
+            else alert("删除失败");
+        } catch(err) { alert("错误: " + err.message); }
+    }
+
+    function copyText(text) {
+        navigator.clipboard.writeText(text).then(() => alert("链接已复制！"));
+    }
+</script>
+</body>
+</html>
