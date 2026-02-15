@@ -38,20 +38,28 @@
     // ⚠️ 此处必须填入你自己的 Worker API 域名
     const API_BASE = "https://img.emx.dpdns.org"; 
 
-    async function loadPublicImages() {
+    // 1. 独立出来的：图标同步功能
+    async function syncFavicon() {
         try {
-        const infoRes = await fetch(`${API_BASE}/api/public/siteinfo`);
-        const infoData = await infoRes.json();
-        if (infoData.site_favicon) {
-            const oldLink = document.getElementById('dynamic-favicon');
-            if (oldLink) oldLink.remove();
-            const newLink = document.createElement('link');
-            newLink.id = 'dynamic-favicon';
-            newLink.rel = 'icon';
-            newLink.href = infoData.site_favicon;
-            document.head.appendChild(newLink);
+            const infoRes = await fetch(`${API_BASE}/api/public/siteinfo`);
+            const infoData = await infoRes.json();
+            if (infoData.site_favicon) {
+                // 强制浏览器重新识别和渲染 favicon
+                const oldLink = document.getElementById('dynamic-favicon');
+                if (oldLink) oldLink.remove();
+                const newLink = document.createElement('link');
+                newLink.id = 'dynamic-favicon';
+                newLink.rel = 'icon';
+                newLink.href = infoData.site_favicon;
+                document.head.appendChild(newLink);
+            }
+        } catch (err) { 
+            console.error("加载网站图标失败"); 
         }
-    } catch (err) { console.error("加载网站图标失败"); }
+    }
+
+    // 2. 独立出来的：图库加载功能
+    async function loadPublicImages() {
         const gallery = document.getElementById('public-gallery');
         try {
             // 调用 Worker 提供的公开访问 API
@@ -75,7 +83,11 @@
         }
     }
 
-    window.onload = loadPublicImages;
+    // 3. 页面加载时，让图标同步和图库渲染兵分两路，同时执行
+    window.onload = () => {
+        syncFavicon();
+        loadPublicImages();
+    };
 </script>
 </body>
 </html>
