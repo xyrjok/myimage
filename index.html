@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>我的公共图库</title>
+    <link id="dynamic-favicon" rel="icon" href="data:;base64,iVBORw0KGgo=">
     <style>
         body { font-family: system-ui, sans-serif; background: #fafafa; margin: 0; padding: 0; }
         header { background: #fff; padding: 20px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
@@ -59,6 +60,13 @@
         } catch (err) {
             gallery.innerHTML = '<p style="text-align:center; color: red; width: 100%;">无法连接到服务器</p>';
         }
+        try {
+            const infoRes = await fetch(`${API_BASE}/api/public/siteinfo`);
+            const infoData = await infoRes.json();
+            if (infoData.site_favicon) {
+                document.getElementById('dynamic-favicon').href = infoData.site_favicon;
+            }
+        } catch (err) { console.error("加载网站图标失败"); }
     }
 
     window.onload = loadPublicImages;
