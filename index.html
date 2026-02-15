@@ -43,7 +43,13 @@
         const infoRes = await fetch(`${API_BASE}/api/public/siteinfo`);
         const infoData = await infoRes.json();
         if (infoData.site_favicon) {
-            document.getElementById('dynamic-favicon').href = infoData.site_favicon;
+            const oldLink = document.getElementById('dynamic-favicon');
+            if (oldLink) oldLink.remove();
+            const newLink = document.createElement('link');
+            newLink.id = 'dynamic-favicon';
+            newLink.rel = 'icon';
+            newLink.href = infoData.site_favicon;
+            document.head.appendChild(newLink);
         }
     } catch (err) { console.error("加载网站图标失败"); }
         const gallery = document.getElementById('public-gallery');
