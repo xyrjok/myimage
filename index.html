@@ -39,6 +39,13 @@
     const API_BASE = "https://img.emx.dpdns.org"; 
 
     async function loadPublicImages() {
+        try {
+        const infoRes = await fetch(`${API_BASE}/api/public/siteinfo`);
+        const infoData = await infoRes.json();
+        if (infoData.site_favicon) {
+            document.getElementById('dynamic-favicon').href = infoData.site_favicon;
+        }
+    } catch (err) { console.error("加载网站图标失败"); }
         const gallery = document.getElementById('public-gallery');
         try {
             // 调用 Worker 提供的公开访问 API
@@ -60,13 +67,6 @@
         } catch (err) {
             gallery.innerHTML = '<p style="text-align:center; color: red; width: 100%;">无法连接到服务器</p>';
         }
-        try {
-            const infoRes = await fetch(`${API_BASE}/api/public/siteinfo`);
-            const infoData = await infoRes.json();
-            if (infoData.site_favicon) {
-                document.getElementById('dynamic-favicon').href = infoData.site_favicon;
-            }
-        } catch (err) { console.error("加载网站图标失败"); }
     }
 
     window.onload = loadPublicImages;
