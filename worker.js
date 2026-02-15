@@ -47,7 +47,30 @@ export default {
       }));
       return jsonResponse(publicImages);
     }
-
+    async function handleUpload(photo, filename, sourceDesc) {
+        const ext = getExt(filename);
+        if (config.storage_provider === 'r2') {
+          if (!env.R2_BUCKET) throw new Error("R2_BUCKET 未绑定");
+          const fileId = crypto.randomUUID();
+          await env.R2_BUCKET.put(fileId, photo);
+          await env.DB.prepare("INSERT INTO images (file_id, message_id, filename, description) VALUES (?, ?, ?, ?)").bind(fileId, 0, filename, `${sourceDesc} (R2)`).run();
+          return { success: true, url: `${url.origin}/image/${fileId}${ext}`, file_id: fileId };
+        } else {
+          const tgFormData = new FormData();
+          tgFormData.append('chat_id', config.tg_chat_id);
+          if (filename.toLowerCase().endsWith('.gif')) tgFormData.append('document', photo.slice(0, photo.size, 'application/octet-stream'), 'file.bin');
+          else tgFormData.append('document', photo); 
+          const tgRes = await fetch(`https://api.telegram.org/bot${config.tg_bot_token}/sendDocument`, { method: 'POST', body: tgFormData });
+          const tgData = await tgRes.json();
+          if (tgData.ok) {
+            const tgDoc = tgData.result.document || tgData.result.animation || tgData.result.video || tgData.result.photo?.pop();
+            const fileId = tgDoc.file_id;
+            await env.DB.prepare("INSERT INTO images (file_id, message_id, filename, description) VALUES (?, ?, ?, ?)").bind(fileId, tgData.result.message_id, filename, `${sourceDesc} (TG)`).run();
+            return { success: true, url: `${url.origin}/image/${fileId}${ext}`, file_id: fileId }; 
+          }
+          throw new Error('TG API 错误');
+        }
+      }
     // ==========================================
     // 2. 外部 API 接口
     // ==========================================
@@ -61,33 +84,8 @@ export default {
         try {
           const formData = await request.formData();
           const photo = formData.get('file');
-          const filename = photo.name || 'api_upload.png';
-
-          const tgFormData = new FormData();
-          tgFormData.append('chat_id', config.tg_chat_id);
-          // 【核心修改】将 photo 改为 document，触发原文件上传
-          if (filename.toLowerCase().endsWith('.gif')) {
-            tgFormData.append('document', photo.slice(0, photo.size, 'application/octet-stream'), 'file.bin');
-          } else {
-            tgFormData.append('document', photo); 
-          } 
-
-          // 【核心修改】调用 sendDocument 接口
-          const tgRes = await fetch(`https://api.telegram.org/bot${config.tg_bot_token}/sendDocument`, { method: 'POST', body: tgFormData });
-          const tgData = await tgRes.json();
-
-          if (tgData.ok) {
-            // 【核心修改】从 document 节点获取 file_id
-            const tgDoc = tgData.result.document || tgData.result.animation || tgData.result.video || tgData.result.photo?.pop();
-            const fileId = tgDoc.file_id;
-            const messageId = tgData.result.message_id;
-            
-            await env.DB.prepare("INSERT INTO images (file_id, message_id, filename, description) VALUES (?, ?, ?, ?)")
-              .bind(fileId, messageId, filename, "API Upload").run();
-
-            return jsonResponse({ success: true, url: `${url.origin}/image/${fileId}${getExt(filename)}`, file_id: fileId }); 
-          }
-          return jsonResponse({ error: 'Telegram API Error', details: tgData }, 500);
+      const result = await handleUpload(photo, photo.name || 'api_upload.png', 'API Upload');
+      return jsonResponse(result);
         } catch (err) { return jsonResponse({ error: err.message }, 500); }
       }
 
@@ -120,43 +118,23 @@ export default {
         try {
           const formData = await request.formData();
           const photo = formData.get('file');
-          const filename = photo.name || 'admin_upload.png';
-
-          const tgFormData = new FormData();
-          tgFormData.append('chat_id', config.tg_chat_id);
-          // 【核心修改】将 photo 改为 document，触发原文件上传
-          if (filename.toLowerCase().endsWith('.gif')) {
-            tgFormData.append('document', photo.slice(0, photo.size, 'application/octet-stream'), 'file.bin');
-          } else {
-            tgFormData.append('document', photo);
-          }
-          // 【核心修改】调用 sendDocument 接口
-          const tgRes = await fetch(`https://api.telegram.org/bot${config.tg_bot_token}/sendDocument`, { method: 'POST', body: tgFormData });
-          const tgData = await tgRes.json();
-
-          if (tgData.ok) {
-            // 【核心修改】从 document 节点获取 file_id
-            const tgDoc = tgData.result.document || tgData.result.animation || tgData.result.video || tgData.result.photo?.pop();
-            const fileId = tgDoc.file_id;
-            const messageId = tgData.result.message_id;
-            
-            await env.DB.prepare("INSERT INTO images (file_id, message_id, filename, description) VALUES (?, ?, ?, ?)")
-              .bind(fileId, messageId, filename, "Admin Upload").run();
-
-            return jsonResponse({ success: true, url: `${url.origin}/image/${fileId}${getExt(filename)}` }); 
-          }
-          return jsonResponse({ error: 'Telegram API Error', details: tgData }, 500);
+      const result = await handleUpload(photo, photo.name || 'admin_upload.png', 'Admin Upload');
+      return jsonResponse(result);
         } catch (err) { return jsonResponse({ error: err.message }, 500); }
       }
 
       if (url.pathname === '/api/admin/delete' && request.method === 'POST') {
         const { id } = await request.json();
-        const record = await env.DB.prepare("SELECT message_id FROM images WHERE id = ?").bind(id).first();
-        if (record) {
+        const record = await env.DB.prepare("SELECT file_id, message_id FROM images WHERE id = ?").bind(id).first();
+      if (record) {
+        if (record.message_id === 0) {
+          if (env.R2_BUCKET) await env.R2_BUCKET.delete(record.file_id);
+        } else {
           await fetch(`https://api.telegram.org/bot${config.tg_bot_token}/deleteMessage`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ chat_id: config.tg_chat_id, message_id: record.message_id })
           });
+        }
           await env.DB.prepare("DELETE FROM images WHERE id = ?").bind(id).run();
         }
         return jsonResponse({ success: true });
@@ -171,7 +149,7 @@ export default {
 
       if (url.pathname === '/api/admin/settings' && request.method === 'POST') {
         const updates = await request.json();
-        const stmts = Object.keys(updates).map(key => env.DB.prepare("UPDATE settings SET value = ? WHERE key = ?").bind(updates[key], key));
+        const stmts = Object.keys(updates).map(key => env.DB.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").bind(key, updates[key]));
         await env.DB.batch(stmts);
         return jsonResponse({ success: true });
       }
@@ -186,6 +164,20 @@ export default {
       const ext = extMatch ? extMatch[1].toLowerCase() : '';
       // 剥离后缀，还原真实的 TG file_id
       fileId = fileId.replace(/\.[a-zA-Z0-9]+$/, ''); 
+      const record = await env.DB.prepare("SELECT message_id FROM images WHERE file_id = ?").bind(fileId).first();
+      if (record && record.message_id === 0) {
+        if (!env.R2_BUCKET) return new Response('R2未绑定', { status: 500, headers: corsHeaders });
+        const object = await env.R2_BUCKET.get(fileId);
+        if (!object) return new Response('R2中未找到图片', { status: 404, headers: corsHeaders });
+        const headers = new Headers();
+        object.writeHttpMetadata(headers);
+        headers.set('etag', object.httpEtag);
+        const extToMime = { '.gif': 'image/gif', '.png': 'image/png', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg' };
+        headers.set('Content-Type', object.httpMetadata?.contentType || extToMime[ext] || 'application/octet-stream');
+        headers.set('Cache-Control', 'public, max-age=31536000');
+        for (const [k, v] of Object.entries(corsHeaders)) headers.set(k, v);
+        return new Response(object.body, { headers });
+      }
 
       const getFileUrl = `https://api.telegram.org/bot${config.tg_bot_token}/getFile?file_id=${fileId}`;
       const fileData = await (await fetch(getFileUrl)).json();
