@@ -66,7 +66,11 @@ export default {
           const tgFormData = new FormData();
           tgFormData.append('chat_id', config.tg_chat_id);
           // 【核心修改】将 photo 改为 document，触发原文件上传
-          tgFormData.append('document', photo); 
+          if (filename.toLowerCase().endsWith('.gif')) {
+            tgFormData.append('document', photo.slice(0, photo.size, 'application/octet-stream'), 'file.bin');
+          } else {
+            tgFormData.append('document', photo); 
+          } 
 
           // 【核心修改】调用 sendDocument 接口
           const tgRes = await fetch(`https://api.telegram.org/bot${config.tg_bot_token}/sendDocument`, { method: 'POST', body: tgFormData });
@@ -121,8 +125,11 @@ export default {
           const tgFormData = new FormData();
           tgFormData.append('chat_id', config.tg_chat_id);
           // 【核心修改】将 photo 改为 document，触发原文件上传
-          tgFormData.append('document', photo);
-
+          if (filename.toLowerCase().endsWith('.gif')) {
+            tgFormData.append('document', photo.slice(0, photo.size, 'application/octet-stream'), 'file.bin');
+          } else {
+            tgFormData.append('document', photo);
+          }
           // 【核心修改】调用 sendDocument 接口
           const tgRes = await fetch(`https://api.telegram.org/bot${config.tg_bot_token}/sendDocument`, { method: 'POST', body: tgFormData });
           const tgData = await tgRes.json();
