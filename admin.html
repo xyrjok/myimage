@@ -113,6 +113,11 @@
                 <label>网站图标 (SITE_FAVICON)</label>
                 <input type="text" id="set_site_favicon" placeholder="https://...">
                 <span class="settings-help">前后台网页标签页显示的 favicon 图标直链</span>
+                <label>存储方式 (STORAGE_PROVIDER)</label>
+            <select id="set_storage_provider" style="width: 100%; padding: 12px; margin-bottom: 20px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box;">
+                <option value="tg">Telegram (免费无限容量)</option>
+                <option value="r2">Cloudflare R2 (需配置 Bucket，国内直连极速)</option>
+            </select>
 
                 <button onclick="saveSettings()" style="width: 100%; margin-top: 10px;">💾 保存所有设置</button>
                 <div id="settingsStatus" style="margin-top: 15px; text-align: center; font-weight: bold;"></div>
@@ -277,7 +282,7 @@
             if (settings.api_key) document.getElementById('set_api_key').value = settings.api_key;
             if (settings.admin_user) document.getElementById('set_admin_user').value = settings.admin_user;
             if (settings.admin_pass) document.getElementById('set_admin_pass').value = settings.admin_pass;
-            
+            if (settings.storage_provider) document.getElementById('set_storage_provider').value = settings.storage_provider;
             if (settings.site_favicon) {
                 document.getElementById('set_site_favicon').value = settings.site_favicon;
                 document.getElementById('dynamic-favicon').href = settings.site_favicon; // 动态更新当前页面图标
@@ -293,6 +298,7 @@
         statusEl.style.color = "#555";
 
         const updates = {
+            storage_provider: document.getElementById('set_storage_provider').value,
             tg_bot_token: document.getElementById('set_tg_bot_token').value.trim(),
             tg_chat_id: document.getElementById('set_tg_chat_id').value.trim(),
             api_key: document.getElementById('set_api_key').value.trim(),
