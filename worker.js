@@ -74,7 +74,8 @@ export default {
 
           if (tgData.ok) {
             // 【核心修改】从 document 节点获取 file_id
-            const fileId = tgData.result.document.file_id;
+            const tgDoc = tgData.result.document || tgData.result.animation || tgData.result.video || tgData.result.photo?.pop();
+            const fileId = tgDoc.file_id;
             const messageId = tgData.result.message_id;
             
             await env.DB.prepare("INSERT INTO images (file_id, message_id, filename, description) VALUES (?, ?, ?, ?)")
@@ -128,7 +129,8 @@ export default {
 
           if (tgData.ok) {
             // 【核心修改】从 document 节点获取 file_id
-            const fileId = tgData.result.document.file_id;
+            const tgDoc = tgData.result.document || tgData.result.animation || tgData.result.video || tgData.result.photo?.pop();
+            const fileId = tgDoc.file_id;
             const messageId = tgData.result.message_id;
             
             await env.DB.prepare("INSERT INTO images (file_id, message_id, filename, description) VALUES (?, ?, ?, ?)")
@@ -173,7 +175,8 @@ export default {
     // ==========================================
     if (url.pathname.startsWith('/image/')) {
       let fileId = url.pathname.replace('/image/', '');
-      
+      const extMatch = fileId.match(/(\.[a-zA-Z0-9]+)$/);
+      const ext = extMatch ? extMatch[1].toLowerCase() : '';
       // 剥离后缀，还原真实的 TG file_id
       fileId = fileId.replace(/\.[a-zA-Z0-9]+$/, ''); 
 
@@ -187,14 +190,12 @@ export default {
 
         // 智能推断 Content-Type
         let contentType = imageRes.headers.get('Content-Type');
-        if (!contentType || contentType === 'application/octet-stream') {
-           if (filePath.toLowerCase().endsWith('.png')) contentType = 'image/png';
-           else if (filePath.toLowerCase().endsWith('.gif')) contentType = 'image/gif';
-           else if (filePath.toLowerCase().endsWith('.webp')) contentType = 'image/webp';
-           else if (filePath.toLowerCase().endsWith('.svg')) contentType = 'image/svg+xml';
-           else contentType = 'image/jpeg';
+        const extToMime = { '.gif': 'image/gif', '.png': 'image/png', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.bmp': 'image/bmp', '.ico': 'image/x-icon', '.tiff': 'image/tiff', '.avif': 'image/avif', '.heic': 'image/heic' };
+        if (extToMime[ext]) {
+          contentType = extToMime[ext];
+        } else if (!contentType || contentType === 'application/octet-stream') {
+          contentType = 'image/jpeg';
         }
-
         return new Response(imageRes.body, {
           headers: { 
             'Content-Type': contentType,
