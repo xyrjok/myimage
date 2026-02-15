@@ -39,6 +39,9 @@ export default {
     // ==========================================
     // 1. 公开 API：前台瀑布流图库读取
     // ==========================================
+    if (url.pathname === '/api/public/siteinfo' && request.method === 'GET') {
+      return jsonResponse({ site_favicon: config.site_favicon });
+    }
     if (url.pathname === '/api/public/images' && request.method === 'GET') {
       const { results } = await env.DB.prepare("SELECT file_id, filename FROM images ORDER BY upload_time DESC").all();
       const publicImages = results.map(img => ({
