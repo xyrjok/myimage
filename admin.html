@@ -38,7 +38,7 @@
         .upload-area { border: 2px dashed #ccc; padding: 30px; text-align: center; border-radius: 8px; margin-bottom: 20px; background: #fff; transition: 0.3s; }
         .upload-area.dragover { background: #e9ecef; border-color: var(--primary); }
         .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; }
-        .image-card { border: 1px solid #eee; border-radius: 8px; overflow: hidden; background: #fff; display: flex; flex-direction: column; }
+        .image-card { border: 1px solid #eee; border-radius: 8px; overflow: hidden; background: #fff; display: flex; flex-direction: column; position: relative; }
         .image-card img { width: 100%; height: 180px; object-fit: cover; }
         .image-info { padding: 15px; flex-grow: 1; }
         .image-info input { width: 100%; margin-top: 5px; margin-bottom: 10px; font-size: 12px; }
@@ -81,6 +81,13 @@
         <div id="tab-images">
             <div class="upload-area" id="drop-zone">
                 <h3>📤 上传新图片 (支持拖拽和批量)</h3>
+                <div style="margin-bottom: 15px; text-align: center;">
+                    <label style="font-weight: bold; font-size: 14px; color: #555;">当前存储节点：</label>
+                    <select id="set_storage_provider" onchange="quickSaveStorage()" style="padding: 6px 12px; border-radius: 6px; border: 1px solid #ccc; outline: none; cursor: pointer;">
+                        <option value="tg">Telegram (免费无限容量)</option>
+                        <option value="r2">Cloudflare R2 (国内直连极速)</option>
+                    </select>
+                </div>
                 <input type="file" id="fileInput" accept="image/*" multiple style="margin-bottom: 10px;">
                 <button onclick="uploadImage()">开始上传</button>
                 <div id="uploadStatus" style="margin-top: 10px; color: #28a745; font-weight: bold;"></div>
@@ -114,11 +121,6 @@
                 <input type="text" id="set_site_favicon" placeholder="https://...">
                 <span class="settings-help">前后台网页标签页显示的 favicon 图标直链</span>
                 <label>存储方式 (STORAGE_PROVIDER)</label>
-            <select id="set_storage_provider" style="width: 100%; padding: 12px; margin-bottom: 20px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box;">
-                <option value="tg">Telegram (免费无限容量)</option>
-                <option value="r2">Cloudflare R2 (需配置 Bucket，国内直连极速)</option>
-            </select>
-
                 <button onclick="saveSettings()" style="width: 100%; margin-top: 10px;">💾 保存所有设置</button>
                 <div id="settingsStatus" style="margin-top: 15px; text-align: center; font-weight: bold;"></div>
             </div>
@@ -241,6 +243,9 @@
             const data = await res.json();
             gallery.innerHTML = data.map(img => `
                 <div class="image-card" id="img-${img.id}">
+                    <div style="position: absolute; top: 8px; left: 8px; background: rgba(0,0,0,0.65); color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 12px; z-index: 10; font-weight: bold; pointer-events: none;">
+                        ${img.message_id === 0 ? '📦 R2' : '✈️ TG'}
+                    </div>
                     <a href="${img.url}" target="_blank"><img src="${img.url}" alt="image"></a>
                     <div class="image-info">
                         <input type="text" value="${img.url}" readonly onclick="this.select()">
@@ -331,6 +336,16 @@
             statusEl.innerText = "❌ 保存失败: " + err.message;
             statusEl.style.color = "#dc3545";
         }
+    }
+    async function quickSaveStorage() {
+        const provider = document.getElementById('set_storage_provider').value;
+        try {
+            await fetch(`${apiBaseUrl}/api/admin/settings`, {
+                method: 'POST',
+                headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ storage_provider: provider })
+            });
+        } catch (err) { console.error("切换存储方式失败", err); }
     }
     setTimeout(() => {
         const dropZone = document.getElementById('drop-zone');
